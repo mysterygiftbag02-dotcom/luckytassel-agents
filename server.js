@@ -35,7 +35,6 @@ app.post('/api/generate', async (req, res) => {
     const data = await response.json();
     const text = data.content?.map(b => b.text || '').join('') || '';
     console.log('Generated text:', text);
-    console.log('Generated text1:', text);
     console.log('Full response:', JSON.stringify(data));
     res.json({ result: text });
   } catch (err) {
@@ -46,29 +45,53 @@ app.post('/api/generate', async (req, res) => {
 app.post('/api/push', async (req, res) => {
   const { agentType, content, shopifyToken, storeUrl } = req.body;
   if (!shopifyToken || !storeUrl) return res.status(400).json({ error: 'Missing credentials' });
-  const base = `https://${storeUrl}/admin/api/2023-10`;
+
+  // Strip any accidental protocol prefix the user may have typed
+  const cleanStore = storeUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const base = `https://${cleanStore}/admin/api/2024-10`;
+
   const headers = {
     'Content-Type': 'application/json',
     'X-Shopify-Access-Token': shopifyToken
   };
+
   try {
     let ok = false;
     if (agentType === 'product') {
-      const r1 = await fetch(`${base}/products.json?limit=1`, { headers });
+      // Use status=any so draft/archived products are also returned
+      const r1 = await fetch(`${base}/products.json?limit=1&status=any`, { headers });
       const d1 = await r1.json();
+      console.log('Shopify products response status:', r1.status);
+      console.log('Shopify products response body:', JSON.stringify(d1));
+
       const pid = d1.products?.[0]?.id;
-      if (!pid) return res.status(404).json({ error: 'No products found' });
+      if (!pid) {
+        const detail = d1.errors || d1.error || 'No products returned';
+        return res.status(404).json({ error: 'No products found', detail });
+      }
+
       const r2 = await fetch(`${base}/products/${pid}.json`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({ product: { id: pid, body_html: `<p>${content}</p>` } })
       });
+      const d2 = await r2.json();
+      console.log('Shopify update response status:', r2.status);
+      console.log('Shopify update response body:', JSON.stringify(d2));
       ok = r2.ok;
+      if (!ok) return res.status(500).json({ error: 'Shopify rejected the update', detail: d2.errors || d2.error });
     } else if (agentType === 'blog') {
       const r1 = await fetch(`${base}/blogs.json`, { headers });
       const d1 = await r1.json();
+      console.log('Shopify blogs response status:', r1.status);
+      console.log('Shopify blogs response body:', JSON.stringify(d1));
+
       const bid = d1.blogs?.[0]?.id;
-      if (!bid) return res.status(404).json({ error: 'No blog found' });
+      if (!bid) {
+        const detail = d1.errors || d1.error || 'No blogs returned';
+        return res.status(404).json({ error: 'No blog found', detail });
+      }
+
       const r2 = await fetch(`${base}/blogs/${bid}/articles.json`, {
         method: 'POST',
         headers,
@@ -80,10 +103,16 @@ app.post('/api/push', async (req, res) => {
           }
         })
       });
+      const d2 = await r2.json();
+      console.log('Shopify article create status:', r2.status, JSON.stringify(d2));
       ok = r2.ok;
+      if (!ok) return res.status(500).json({ error: 'Shopify rejected the article', detail: d2.errors || d2.error });
     } else if (agentType === 'policy') {
       const r1 = await fetch(`${base}/pages.json`, { headers });
       const d1 = await r1.json();
+      console.log('Shopify pages response status:', r1.status);
+      console.log('Shopify pages response body:', JSON.stringify(d1));
+
       const page = d1.pages?.find(p => p.handle === 'returns' || p.handle === 'refund-policy' || p.handle === 'faq');
       if (page) {
         const r2 = await fetch(`${base}/pages/${page.id}.json`, {
@@ -91,24 +120,28 @@ app.post('/api/push', async (req, res) => {
           headers,
           body: JSON.stringify({ page: { id: page.id, body_html: `<p>${content}</p>` } })
         });
+        const d2 = await r2.json();
+        console.log('Shopify page update status:', r2.status, JSON.stringify(d2));
         ok = r2.ok;
+        if (!ok) return res.status(500).json({ error: 'Shopify rejected the page update', detail: d2.errors || d2.error });
       } else {
         const r2 = await fetch(`${base}/pages.json`, {
           method: 'POST',
           headers,
           body: JSON.stringify({ page: { title: 'Returns & FAQ', body_html: `<p>${content}</p>`, published: true } })
         });
+        const d2 = await r2.json();
+        console.log('Shopify page create status:', r2.status, JSON.stringify(d2));
         ok = r2.ok;
+        if (!ok) return res.status(500).json({ error: 'Shopify rejected page creation', detail: d2.errors || d2.error });
       }
     } else if (agentType === 'homepage') {
       return res.json({ success: true, note: 'Paste into Shopify theme editor hero section.' });
     }
-    if (ok) {
-      res.json({ success: true });
-    } else {
-      res.status(500).json({ error: 'Shopify rejected the request' });
-    }
+
+    res.json({ success: true });
   } catch (err) {
+    console.error('Push error:', err);
     res.status(500).json({ error: 'Push failed: ' + err.message });
   }
 });
