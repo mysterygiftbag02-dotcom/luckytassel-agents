@@ -151,5 +151,27 @@ app.post('/api/push', async (req, res) => {
   }
 });
 
+// Test endpoint — checks Shopify credentials and scopes without modifying anything
+app.post('/api/test-connection', async (req, res) => {
+  const { shopifyToken, storeUrl } = req.body;
+  if (!shopifyToken || !storeUrl) return res.status(400).json({ error: 'Missing credentials' });
+
+  const cleanStore = storeUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const base = `https://${cleanStore}/admin/api/2024-10`;
+  const headers = { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': shopifyToken };
+
+  const results = {};
+  for (const [name, path] of [['shop', '/shop.json'], ['products', '/products.json?limit=1&status=any'], ['blogs', '/blogs.json']]) {
+    try {
+      const r = await fetch(`${base}${path}`, { headers });
+      const body = await safeJson(r);
+      results[name] = { status: r.status, ok: r.ok, body };
+    } catch (e) {
+      results[name] = { error: e.message };
+    }
+  }
+  res.json(results);
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Lucky Tassel agents running on port ${PORT}`));
