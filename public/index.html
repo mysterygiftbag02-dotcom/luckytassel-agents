@@ -38,8 +38,7 @@ input:focus { outline: none; border-color: #aaa; }
 .scope { font-size: 11px; color: #aaa; font-family: monospace; }
 .a-btns { display: flex; gap: 8px; }
 .a-btns .btn { flex: 1; font-size: 12px; padding: 7px; }
-.output { background: #f5f4f0; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #444; line-height: 1.6; display: none; border: 1px solid #e8e6e0; }
-.output.show { display: block; }
+.output { background: #f5f4f0; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #444; line-height: 1.6; border: 1px solid #e8e6e0; min-height: 60px; margin-top: 4px; }
 .ok { color: #3b6d11; font-weight: 500; margin-top: 6px; font-size: 12px; }
 .err { color: #993c1d; font-size: 12px; margin-top: 6px; }
 .log { margin-top: 1.5rem; }
@@ -75,10 +74,11 @@ input:focus { outline: none; border-color: #aaa; }
       <div class="a-desc">Writes SEO copy for your products</div>
       <span class="scope">write_products</span>
       <div class="a-btns">
-        <button class="btn" onclick="runAgent('product', this)">✦ Generate</button>
-        <button class="btn btn-green" id="push-product" disabled onclick="doPush('product')">↑ Push</button>
+        <button class="btn" id="gen-product" onclick="runAgent('product')">✦ Generate</button>
+        <button class="btn btn-green" id="push-product" onclick="doPush('product')">↑ Push</button>
       </div>
-      <div class="output" id="out-product"></div>
+      <div class="output" id="out-product">Click Generate to write copy…</div>
+      <div id="msg-product"></div>
     </div>
     <div class="agent">
       <div class="a-icon" style="background:#e1f5ee">📖</div>
@@ -86,10 +86,11 @@ input:focus { outline: none; border-color: #aaa; }
       <div class="a-desc">Creates draft blog posts</div>
       <span class="scope">write_content</span>
       <div class="a-btns">
-        <button class="btn" onclick="runAgent('blog', this)">✦ Generate</button>
-        <button class="btn btn-green" id="push-blog" disabled onclick="doPush('blog')">↑ Push</button>
+        <button class="btn" id="gen-blog" onclick="runAgent('blog')">✦ Generate</button>
+        <button class="btn btn-green" id="push-blog" onclick="doPush('blog')">↑ Push</button>
       </div>
-      <div class="output" id="out-blog"></div>
+      <div class="output" id="out-blog">Click Generate to write copy…</div>
+      <div id="msg-blog"></div>
     </div>
     <div class="agent">
       <div class="a-icon" style="background:#faeeda">🏠</div>
@@ -97,10 +98,11 @@ input:focus { outline: none; border-color: #aaa; }
       <div class="a-desc">Hero taglines for your theme</div>
       <span class="scope">write_themes</span>
       <div class="a-btns">
-        <button class="btn" onclick="runAgent('homepage', this)">✦ Generate</button>
-        <button class="btn btn-green" id="push-homepage" disabled onclick="doPush('homepage')">↑ Push</button>
+        <button class="btn" id="gen-homepage" onclick="runAgent('homepage')">✦ Generate</button>
+        <button class="btn btn-green" id="push-homepage" onclick="doPush('homepage')">↑ Push</button>
       </div>
-      <div class="output" id="out-homepage"></div>
+      <div class="output" id="out-homepage">Click Generate to write copy…</div>
+      <div id="msg-homepage"></div>
     </div>
     <div class="agent">
       <div class="a-icon" style="background:#faece7">📋</div>
@@ -108,10 +110,11 @@ input:focus { outline: none; border-color: #aaa; }
       <div class="a-desc">Rewrites FAQ and returns pages</div>
       <span class="scope">write_content</span>
       <div class="a-btns">
-        <button class="btn" onclick="runAgent('policy', this)">✦ Generate</button>
-        <button class="btn btn-green" id="push-policy" disabled onclick="doPush('policy')">↑ Push</button>
+        <button class="btn" id="gen-policy" onclick="runAgent('policy')">✦ Generate</button>
+        <button class="btn btn-green" id="push-policy" onclick="doPush('policy')">↑ Push</button>
       </div>
-      <div class="output" id="out-policy"></div>
+      <div class="output" id="out-policy">Click Generate to write copy…</div>
+      <div id="msg-policy"></div>
     </div>
   </div>
 
@@ -124,94 +127,97 @@ input:focus { outline: none; border-color: #aaa; }
 </div>
 
 <script>
-let connected = false;
-const outputs = {};
+var connected = false;
+var outputs = { product: null, blog: null, homepage: null, policy: null };
 
-function addLog(msg, type='a') {
-  const t = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-  const el = document.createElement('div');
+function addLog(msg, type) {
+  type = type || 'a';
+  var t = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  var el = document.createElement('div');
   el.className = 'log-item';
-  el.innerHTML = `<span class="ldot ${type}"></span>${msg}<span class="ltime">${t}</span>`;
-  const list = document.getElementById('logList');
+  el.innerHTML = '<span class="ldot ' + type + '"></span>' + msg + '<span class="ltime">' + t + '</span>';
+  var list = document.getElementById('logList');
   list.insertBefore(el, list.firstChild);
   if (list.children.length > 8) list.removeChild(list.lastChild);
 }
 
 function doConnect() {
-  const token = document.getElementById('apiToken').value.trim();
+  var token = document.getElementById('apiToken').value.trim();
+  var url = document.getElementById('storeUrl').value.trim();
   if (!token) { alert('Please enter your Shopify API token.'); return; }
-  const btn = document.getElementById('connBtn');
-  btn.textContent = 'Connecting…';
-  btn.disabled = true;
-  setTimeout(() => {
-    connected = true;
-    document.getElementById('badge').className = 'badge on';
-    document.getElementById('bdot').className = 'dot on';
-    document.getElementById('btext').textContent = document.getElementById('storeUrl').value;
-    btn.textContent = '✓ Connected';
-    btn.className = 'btn btn-full connected';
-    addLog('Connected to ' + document.getElementById('storeUrl').value, 'g');
-  }, 700);
+  connected = true;
+  document.getElementById('badge').className = 'badge on';
+  document.getElementById('bdot').className = 'dot on';
+  document.getElementById('btext').textContent = url;
+  var btn = document.getElementById('connBtn');
+  btn.textContent = '✓ Connected';
+  btn.className = 'btn btn-full connected';
+  addLog('Connected to ' + url, 'g');
 }
 
-async function runAgent(type, btn) {
-  if (!connected) { alert('Connect to Shopify first.'); return; }
+function runAgent(type) {
+  if (!connected) { alert('Please connect to Shopify first.'); return; }
+  var btn = document.getElementById('gen-' + type);
+  var out = document.getElementById('out-' + type);
   btn.disabled = true;
   btn.textContent = 'Generating…';
-  const out = document.getElementById(`out-${type}`);
-  out.className = 'output show';
-  out.innerHTML = '<em style="color:#aaa">Writing copy…</em>';
-  addLog(`${type} agent running…`, 'a');
-  try {
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentType: type })
-    });
-    const data = await res.json();
+  out.textContent = 'Writing copy…';
+  addLog(type + ' agent running…', 'a');
+
+  fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentType: type })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
     if (data.error) throw new Error(data.error);
     outputs[type] = data.result;
     out.textContent = data.result;
-    document.getElementById(`push-${type}`).disabled = false;
-    addLog(`${type} copy ready`, 'g');
-  } catch(e) {
-    out.innerHTML = `<span style="color:#993c1d">Error: ${e.message}</span>`;
-    addLog(`${type} failed`, 'a');
-  }
-  btn.disabled = false;
-  btn.textContent = '↺ Regenerate';
+    addLog(type + ' copy ready', 'g');
+    btn.disabled = false;
+    btn.textContent = '↺ Regenerate';
+  })
+  .catch(function(e) {
+    out.textContent = 'Error: ' + e.message;
+    addLog(type + ' failed: ' + e.message, 'a');
+    btn.disabled = false;
+    btn.textContent = '✦ Generate';
+  });
 }
 
-async function doPush(type) {
-  async function doPush(type) {
-  if (!connected) { alert('Not connected'); return; }
-  if (!outputs[type]) { alert('No content yet — click Generate first'); return; }
-  const token = document.getElementById('apiToken').value.trim();
-  const store = document.getElementById('storeUrl').value.trim();
-  const btn = document.getElementById(`push-${type}`);
+function doPush(type) {
+  if (!connected) { alert('Please connect to Shopify first.'); return; }
+  if (!outputs[type]) { alert('Please click Generate first to create the copy.'); return; }
+
+  var token = document.getElementById('apiToken').value.trim();
+  var store = document.getElementById('storeUrl').value.trim();
+  var btn = document.getElementById('push-' + type);
+  var msg = document.getElementById('msg-' + type);
+
   btn.disabled = true;
   btn.textContent = 'Pushing…';
-  addLog(`Pushing ${type} to ${store}…`, 'a');
-  try {
-    const res = await fetch('/api/push', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentType: type, content: outputs[type], shopifyToken: token, storeUrl: store })
-    });
-    const data = await res.json();
+  msg.innerHTML = '';
+  addLog('Pushing ' + type + ' to ' + store + '…', 'a');
+
+  fetch('/api/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentType: type, content: outputs[type], shopifyToken: token, storeUrl: store })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
     if (data.error) throw new Error(data.error);
-    const out = document.getElementById(`out-${type}`);
-    const d = document.createElement('div');
-    d.className = 'ok';
-    d.textContent = '✓ Live on ' + store;
-    out.appendChild(d);
+    msg.innerHTML = '<div class="ok">✓ Live on ' + store + '</div>';
     btn.textContent = '✓ Done';
-    addLog(`${type} is live!`, 'g');
-  } catch(e) {
-    addLog(`Push failed: ${e.message}`, 'a');
+    addLog(type + ' is live!', 'g');
+  })
+  .catch(function(e) {
+    msg.innerHTML = '<div class="err">Error: ' + e.message + '</div>';
+    addLog('Push failed: ' + e.message, 'a');
     btn.disabled = false;
     btn.textContent = '↑ Retry';
-  }
+  });
 }
 </script>
 </body>
