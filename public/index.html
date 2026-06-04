@@ -183,7 +183,9 @@ async function runAgent(type, btn) {
 }
 
 async function doPush(type) {
-  if (!connected || !outputs[type]) return;
+  async function doPush(type) {
+  if (!connected) { alert('Not connected'); return; }
+  if (!outputs[type]) { alert('No content yet — click Generate first'); return; }
   const token = document.getElementById('apiToken').value.trim();
   const store = document.getElementById('storeUrl').value.trim();
   const btn = document.getElementById(`push-${type}`);
