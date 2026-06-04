@@ -34,6 +34,7 @@ app.post('/api/generate', async (req, res) => {
     });
     const data = await response.json();
     const text = data.content?.map(b => b.text || '').join('') || '';
+    console.log('Generated text:', text);
     res.json({ result: text });
   } catch (err) {
     res.status(500).json({ error: 'Generation failed' });
