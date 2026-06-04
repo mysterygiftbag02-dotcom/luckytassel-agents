@@ -7,6 +7,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+async function safeJson(response) {
+  const text = await response.text();
+  try { return JSON.parse(text); } catch { return { _raw: text }; }
+}
+
 const prompts = {
   product: "Write a compelling 3-sentence product description for Lucky Tassel's handmade silk tassel keychain. SEO-optimised, warm and playful tone. Reply with ONLY the description text.",
   blog: "Write a 4-sentence intro for a Lucky Tassel blog post titled 5 Ways to Style Tassels This Season. Fun trend-aware tone. Reply with ONLY the paragraph.",
@@ -60,7 +65,7 @@ app.post('/api/push', async (req, res) => {
     if (agentType === 'product') {
       // Use status=any so draft/archived products are also returned
       const r1 = await fetch(`${base}/products.json?limit=1&status=any`, { headers });
-      const d1 = await r1.json();
+      const d1 = await safeJson(r1);
       console.log('Shopify products response status:', r1.status);
       console.log('Shopify products response body:', JSON.stringify(d1));
 
@@ -75,14 +80,14 @@ app.post('/api/push', async (req, res) => {
         headers,
         body: JSON.stringify({ product: { id: pid, body_html: `<p>${content}</p>` } })
       });
-      const d2 = await r2.json();
+      const d2 = await safeJson(r2);
       console.log('Shopify update response status:', r2.status);
       console.log('Shopify update response body:', JSON.stringify(d2));
       ok = r2.ok;
       if (!ok) return res.status(500).json({ error: 'Shopify rejected the update', detail: d2.errors || d2.error });
     } else if (agentType === 'blog') {
       const r1 = await fetch(`${base}/blogs.json`, { headers });
-      const d1 = await r1.json();
+      const d1 = await safeJson(r1);
       console.log('Shopify blogs response status:', r1.status);
       console.log('Shopify blogs response body:', JSON.stringify(d1));
 
@@ -103,13 +108,13 @@ app.post('/api/push', async (req, res) => {
           }
         })
       });
-      const d2 = await r2.json();
+      const d2 = await safeJson(r2);
       console.log('Shopify article create status:', r2.status, JSON.stringify(d2));
       ok = r2.ok;
       if (!ok) return res.status(500).json({ error: 'Shopify rejected the article', detail: d2.errors || d2.error });
     } else if (agentType === 'policy') {
       const r1 = await fetch(`${base}/pages.json`, { headers });
-      const d1 = await r1.json();
+      const d1 = await safeJson(r1);
       console.log('Shopify pages response status:', r1.status);
       console.log('Shopify pages response body:', JSON.stringify(d1));
 
@@ -120,7 +125,7 @@ app.post('/api/push', async (req, res) => {
           headers,
           body: JSON.stringify({ page: { id: page.id, body_html: `<p>${content}</p>` } })
         });
-        const d2 = await r2.json();
+        const d2 = await safeJson(r2);
         console.log('Shopify page update status:', r2.status, JSON.stringify(d2));
         ok = r2.ok;
         if (!ok) return res.status(500).json({ error: 'Shopify rejected the page update', detail: d2.errors || d2.error });
@@ -130,7 +135,7 @@ app.post('/api/push', async (req, res) => {
           headers,
           body: JSON.stringify({ page: { title: 'Returns & FAQ', body_html: `<p>${content}</p>`, published: true } })
         });
-        const d2 = await r2.json();
+        const d2 = await safeJson(r2);
         console.log('Shopify page create status:', r2.status, JSON.stringify(d2));
         ok = r2.ok;
         if (!ok) return res.status(500).json({ error: 'Shopify rejected page creation', detail: d2.errors || d2.error });
