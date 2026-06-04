@@ -46,7 +46,7 @@ app.post('/api/generate', async (req, res) => {
 app.post('/api/push', async (req, res) => {
   const { agentType, content, shopifyToken, storeUrl } = req.body;
   if (!shopifyToken || !storeUrl) return res.status(400).json({ error: 'Missing credentials' });
-  const base = `https://${storeUrl}/admin/api/2024-01`;
+  const base = `https://${storeUrl}/admin/api/2023-10`;
   const headers = {
     'Content-Type': 'application/json',
     'X-Shopify-Access-Token': shopifyToken
